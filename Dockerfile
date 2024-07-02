@@ -2,9 +2,8 @@ FROM python:3.10.12-slim
 
 WORKDIR /app
 
-COPY dist ./dist
+COPY . .
 
-# ? * install all dependencies in dist
-RUN pip install ./dist/fastapi_template-0.1.0.tar.gz
+RUN pip install -r requirements.txt
 
-CMD ["fastapi-run"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8001"]
