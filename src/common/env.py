@@ -8,12 +8,16 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore", env_prefix=""
     )
-    
+
     MONGO_HOST: Optional[str] = Field("localhost")
     MONGO_PORT: Optional[Union[str, int]] = Field(27017)
     MONGO_USERNAME: Optional[str] = None
     MONGO_PASSWORD: Optional[str] = None
     MONGO_DATABASE: str
+
+    AUTH_SECRET_KEY: str
+    AUTH_ALGORITHM: str
+    AUTH_ACCESS_TOKEN_EXPIRE_MINUTES: int
 
 
 def env_settings(other_env: str = None) -> Settings:

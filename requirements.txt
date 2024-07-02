@@ -23,6 +23,7 @@ pydantic-core==2.20.0 ; python_full_version >= "3.10.12" and python_version < "3
 pydantic-settings==2.3.4 ; python_full_version >= "3.10.12" and python_version < "3.12"
 pydantic==2.8.0 ; python_full_version >= "3.10.12" and python_version < "3.12"
 pygments==2.18.0 ; python_full_version >= "3.10.12" and python_version < "3.12"
+pyjwt==2.8.0 ; python_full_version >= "3.10.12" and python_version < "3.12"
 pymongo==4.8.0 ; python_full_version >= "3.10.12" and python_version < "3.12"
 python-dotenv==1.0.1 ; python_full_version >= "3.10.12" and python_version < "3.12"
 python-multipart==0.0.9 ; python_full_version >= "3.10.12" and python_version < "3.12"

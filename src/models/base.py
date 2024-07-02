@@ -5,7 +5,6 @@ from typing import Optional, Union
 from pydantic import BaseModel, Field, model_validator
 
 
-
 class DatabaseConnectionMeta(BaseModel):
 
     host: Optional[str] = Field("localhost", description="Connection host")
@@ -44,6 +43,13 @@ class DatabaseConnectionMeta(BaseModel):
             self.port = int(self.port)
         return self
 
+
 class SearchSchema(BaseModel):
     field: str = Field(..., description="Field name")
     value: str = Field(..., description="Value search")
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+    expiredOn: Optional[str]
