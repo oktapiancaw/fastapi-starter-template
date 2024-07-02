@@ -8,21 +8,15 @@ from starlette.middleware.cors import CORSMiddleware
 
 from src.configs.db import MainMongo
 from src.routes.base import router as api_router
+from src.routes.middleware import ProcessTimeMiddleware, RateLimitingMiddleware
 
 
 def get_application() -> FastAPI:
-    # _app_name = "importlib.metadata.metadata(_app_name)"
-    # _app_title = importlib.metadata.metadata(_app_name).get("Name").replace("-", " ").title()
-    # _app_version = importlib.metadata.metadata(_app_name).get("Version")
-    # _app_contact = {
-    #     'name': importlib.metadata.metadata(_app_name).get("Author"),
-    #     'email': importlib.metadata.metadata(_app_name).get("Author-email")
-    # }
-    # _app_description = importlib.metadata.metadata(_app_name).get("Summary")
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.mongo = MainMongo()
+        app.state.mongo.connect()
         yield
         app.state.mongo.close()
 
@@ -41,6 +35,8 @@ def get_application() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    application.add_middleware(RateLimitingMiddleware)
+    application.add_middleware(ProcessTimeMiddleware)
 
     application.include_router(api_router)
 
