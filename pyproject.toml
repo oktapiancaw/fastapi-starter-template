@@ -1,22 +1,22 @@
 [tool.poetry]
-name = "fastapi-template"
+name = "fastapi-starter-template"
 version = "0.1.0"
 description = ""
 authors = ["Oktapian <oktapian1998@gmail.com>"]
-readme = "Readme.md"
-packages = [{include = "src"}]
+readme = "README.md"
+package-mode = false
 
 [tool.poetry.dependencies]
-python = "^3.10"
-pydantic = "^2.4.2"
-pydantic-settings = "^2.0.3"
-uvicorn = "^0.25.0"
-fastapi = "^0.108.0"
+python = ">=3.10.12, <3.12"
+pydantic = "^2.8.0"
+pydantic-settings = "^2.3.4"
+fastapi = "^0.111.0"
 loguru = "^0.7.2"
-pymongo = "^4.6.1"
+pymongo = "^4.8.0"
 
 [tool.poetry.scripts]
 fastapi-run = "src.main:start"
+
 
 [build-system]
 requires = ["poetry-core"]
