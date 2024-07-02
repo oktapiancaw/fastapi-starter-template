@@ -6,11 +6,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore", env_prefix="TEMPLATE_"
+        env_file=".env", env_file_encoding="utf-8", extra="ignore", env_prefix=""
     )
     
-    MONGO_HOST: str
-    MONGO_PORT: int | str = Field(27017)
+    MONGO_HOST: Optional[str] = Field("localhost")
+    MONGO_PORT: Optional[Union[str, int]] = Field(27017)
+    MONGO_USERNAME: Optional[str] = None
+    MONGO_PASSWORD: Optional[str] = None
     MONGO_DATABASE: str
 
 
