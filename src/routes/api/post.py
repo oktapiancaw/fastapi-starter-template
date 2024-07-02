@@ -55,10 +55,11 @@ def get_all_posts(req: Request):
         mongo = cast(MainMongo, req.app.state.mongo)
 
         raw = mongo.db[__main_collection].find({"status": {"$ne": "archive"}})
+        posts = list(raw)
         # * Validation if post is exists
-        if list(raw):
+        if posts:
             # * Transform post model
-            payloads = TypeAdapter(PostViewList).validate_python(raw)
+            payloads = TypeAdapter(PostViewList).validate_python(posts)
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
                 content={
@@ -94,11 +95,12 @@ def search_posts(req: Request, search: SearchSchema):
         raw = mongo.db[__main_collection].find(
             query.update({search.field: {"$regex": search.value}})
         )
+        posts = list(raw)
 
         # * Validation if post is exists
-        if list(raw):
+        if posts:
             # * Transform post model
-            payloads = TypeAdapter(PostViewList).validate_python(raw)
+            payloads = TypeAdapter(PostViewList).validate_python(posts)
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
                 content={
