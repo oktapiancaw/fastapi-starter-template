@@ -1,3 +1,5 @@
+## Best Practice for public directory
+
 ```sh
 # path
 /public/**/*
