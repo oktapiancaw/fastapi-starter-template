@@ -6,19 +6,21 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from starlette.middleware.cors import CORSMiddleware
 
-from src.configs.db import MainMongo
+from src.configs.db import MainPostgre
 from src.routes.base import router as api_router
 from src.routes.middleware import ProcessTimeMiddleware, RateLimitingMiddleware
+from src.models.post import Base
 
 
 def get_application() -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        app.state.mongo = MainMongo()
-        app.state.mongo.connect()
+        app.state.postgre = MainPostgre()
+        app.state.postgre.connect()
+        Base.metadata.create_all(app.state.postgre.engine)
         yield
-        app.state.mongo.close()
+        app.state.postgre.close()
 
     application = FastAPI(
         docs_url="/",

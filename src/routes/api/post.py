@@ -4,23 +4,22 @@ from loguru import logger
 from pydantic import TypeAdapter
 from fastapi import APIRouter, Request, HTTPException, Path, status
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
-from src.configs.db import MainMongo
+from src.configs.db import MainPostgre
 from src.models.base import SearchSchema
-from src.models.post import PostMeta, PostData, PostView, PostViewList
+from src.models.post import PostMeta, PostData, PostView, PostViewList, PostOrm
 
 app = APIRouter()
-__main_collection = "post"
+__main_collection = PostOrm.__tablename__
 
 
 @app.get("/{id}")
 def get_post(req: Request, id: str = Path(...)):
     try:
-        mongo = cast(MainMongo, req.app.state.mongo)
+        postgre = cast(MainPostgre, req.app.state.postgre)
 
-        raw = mongo.db[__main_collection].find_one(
-            {"_id": id, "status": {"$ne": "archive"}}
-        )
+        raw = postgre.client.query(PostOrm).where(PostOrm.id == id).first()
         if raw:
             payload = TypeAdapter(PostView).validate_python(raw)
             return JSONResponse(
@@ -50,16 +49,13 @@ def get_post(req: Request, id: str = Path(...)):
 @app.get("s")
 def get_all_posts(req: Request):
     try:
+        postgre = cast(MainPostgre, req.app.state.postgre)
 
-        # ? Get mongo from lifespan
-        mongo = cast(MainMongo, req.app.state.mongo)
-
-        raw = mongo.db[__main_collection].find({"status": {"$ne": "archive"}})
-        posts = list(raw)
+        raw = postgre.client.query(PostOrm).where(PostOrm.status != "archive").all()
         # * Validation if post is exists
-        if posts:
+        if raw:
             # * Transform post model
-            payloads = TypeAdapter(PostViewList).validate_python(posts)
+            payloads = TypeAdapter(PostViewList).validate_python(raw)
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
                 content={
@@ -89,18 +85,23 @@ def get_all_posts(req: Request):
 @app.post("s/search")
 def search_posts(req: Request, search: SearchSchema):
     try:
-        mongo = cast(MainMongo, req.app.state.mongo)
-        query = {"status": {"$ne": "archive"}}
-        count = mongo.db[__main_collection].count_documents(query)
-        raw = mongo.db[__main_collection].find(
-            query.update({search.field: {"$regex": search.value}})
-        )
-        posts = list(raw)
+        postgre = cast(MainPostgre, req.app.state.postgre)
 
+        count = postgre.client.execute(
+            text(
+                f"""SELECT COUNT(id) FROM public."{__main_collection}" WHERE status<>\'archive\'"""
+            )
+        ).scalar()
+        raw = (
+            postgre.client.query(PostOrm)
+            .where(PostOrm.status != "archive")
+            .where(text(f"{search.field} ILIKE '%{search.value}%'"))
+            .all()
+        )
         # * Validation if post is exists
-        if posts:
+        if raw:
             # * Transform post model
-            payloads = TypeAdapter(PostViewList).validate_python(posts)
+            payloads = TypeAdapter(PostViewList).validate_python(raw)
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
                 content={
@@ -130,18 +131,19 @@ def search_posts(req: Request, search: SearchSchema):
 @app.post("")
 def add_post(req: Request, data: PostMeta):
     try:
-        mongo = cast(MainMongo, req.app.state.mongo)
+        postgre = cast(MainPostgre, req.app.state.postgre)
 
         payload = TypeAdapter(PostData).validate_python(data.model_dump())
 
-        mongo.db[__main_collection].insert_one(payload.save_mongo)
+        postgre.client.add(payload.orm_structure)
+        postgre.client.commit()
 
         return JSONResponse(
             status_code=status.HTTP_201_CREATED,
             content={
                 "status": status.HTTP_201_CREATED,
                 "message": "Success add post",
-                "data": {"id": payload.id},
+                "data": {"id": str(payload.id)},
             },
         )
     except Exception:
@@ -154,22 +156,21 @@ def add_post(req: Request, data: PostMeta):
 @app.put("/{id}")
 def edit_post(req: Request, data: PostMeta, id: str = Path(...)):
     try:
-        mongo = cast(MainMongo, req.app.state.mongo)
+        postgre = cast(MainPostgre, req.app.state.postgre)
 
-        raw = mongo.db[__main_collection].find_one({"_id": id})
+        raw = postgre.client.query(PostOrm).where(PostOrm.id == id).first()
         if raw:
-            payload = TypeAdapter(PostData).validate_python(data.model_dump())
-
-            mongo.db[__main_collection].update_one(
-                {"_id": id}, {"$set": payload.update_mongo}
+            postgre.client.query(PostOrm).where(PostOrm.id == id).update(
+                data.model_dump(exclude_none=True)
             )
+            postgre.client.commit()
 
             return JSONResponse(
                 status_code=status.HTTP_202_ACCEPTED,
                 content={
                     "status": status.HTTP_202_ACCEPTED,
                     "message": "Success edit post",
-                    "data": {"id": payload.id},
+                    "data": {"id": id},
                 },
             )
 
@@ -190,22 +191,21 @@ def edit_post(req: Request, data: PostMeta, id: str = Path(...)):
 @app.delete("/{id}")
 def delete_post(req: Request, id: str = Path(...)):
     try:
-        mongo = cast(MainMongo, req.app.state.mongo)
+        postgre = cast(MainPostgre, req.app.state.postgre)
 
-        raw = mongo.db[__main_collection].find_one({"_id": id})
+        raw = postgre.client.query(PostOrm).where(PostOrm.id == id).first()
         if raw:
-            payload = TypeAdapter(PostData).validate_python(raw)
-
-            mongo.db[__main_collection].update_one(
-                {"_id": id}, {"$set": payload.delete_mongo}
+            postgre.client.query(PostOrm).where(PostOrm.id == id).update(
+                {"status": "archive"}
             )
+            postgre.client.commit()
 
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
                 content={
                     "status": status.HTTP_200_OK,
                     "message": "Success delete post",
-                    "data": {"id": payload.id},
+                    "data": {"id": id},
                 },
             )
 

@@ -3,7 +3,11 @@ import re
 from typing import Optional, Union
 
 from pydantic import BaseModel, Field, model_validator
+from sqlalchemy.orm import DeclarativeBase
 
+
+class Base(DeclarativeBase):
+    pass
 
 
 class DatabaseConnectionMeta(BaseModel):
@@ -43,6 +47,7 @@ class DatabaseConnectionMeta(BaseModel):
                 self.host, self.port = re.split(r"\:", metadata)
             self.port = int(self.port)
         return self
+
 
 class SearchSchema(BaseModel):
     field: str = Field(..., description="Field name")

@@ -1,32 +1,39 @@
-from contextlib import contextmanager
-
 from loguru import logger
-from pymongo import MongoClient
+from sqlalchemy import create_engine, Engine, URL
+from sqlalchemy.orm import Session
 
-from src.common import envs
+from src.common.env import envs
 from src.models.base import DatabaseConnectionMeta
 
 
-class MongoConnector:
+class PostgreSQLConnector:
     def __init__(self, meta: DatabaseConnectionMeta) -> None:
         self._meta: DatabaseConnectionMeta = meta
         if not self._meta.uri:
-            self._meta.uri = self._meta.uri_string(base="mongodb", with_db=False)
+            self._meta.uri = self._meta.uri_string(
+                base="postgresql+psycopg2", with_db=True
+            )
         self.client = None
-
-    @contextmanager
-    def __call__(self, **kwargs):
-        self.connect(**kwargs)
-        yield self
-        self.close()
 
     def connect(self, **kwargs):
         try:
-            self.client: MongoClient = MongoClient(self._meta.uri, **kwargs)
-            self.db = self.client[self._meta.database]
+            if "@" in self._meta.password:
+                self.engine: Engine = create_engine(
+                    URL.create(
+                        drivername="postgresql+psycopg2",
+                        username=self._meta.username,
+                        password=self._meta.password,
+                        host=self._meta.host,
+                        port=self._meta.port,
+                        database=self._meta.database,
+                    )
+                )
+            else:
+                self.engine: Engine = create_engine(self._meta.uri, **kwargs)
+            self.client = Session(self.engine)
             logger.success("Database is connected")
-        except:
-            raise
+        except Exception:
+            raise ValueError("Failed to connect to PostgreSQL")
 
     def close(self):
         if self.client:
@@ -34,14 +41,14 @@ class MongoConnector:
         logger.success("Database is closed")
 
 
-class MainMongo(MongoConnector):
+class MainPostgre(PostgreSQLConnector):
     def __init__(self) -> None:
         super().__init__(
-            meta=DatabaseConnectionMeta(
-                host=envs.MONGO_HOST,
-                port=envs.MONGO_PORT,
-                username=envs.MONGO_USERNAME,
-                password=envs.MONGO_PASSWORD,
-                database=envs.MONGO_DATABASE,
+            DatabaseConnectionMeta(
+                host=envs.POSTGRE_HOST,
+                port=envs.POSTGRE_PORT,
+                username=envs.POSTGRE_USERNAME,
+                password=envs.POSTGRE_PASSWORD,
+                database=envs.POSTGRE_DATABASE,
             )
         )
