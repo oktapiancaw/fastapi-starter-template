@@ -4,7 +4,8 @@ version = "0.1.0"
 description = ""
 authors = ["Oktapian <oktapian1998@gmail.com>"]
 readme = "README.md"
-package-mode = false
+packages = [{include = "src"}]
+# package-mode = false
 
 [tool.poetry.dependencies]
 python = ">=3.10.12, <3.12"
@@ -14,9 +15,14 @@ fastapi = "^0.111.0"
 loguru = "^0.7.2"
 pymongo = "^4.8.0"
 
+# ? Wajib package
 [tool.poetry.scripts]
+generator = "src.generator:app"
 fastapi-run = "src.main:start"
 
+
+[tool.poetry.group.dev.dependencies]
+typer = "^0.12.3"
 
 [build-system]
 requires = ["poetry-core"]

@@ -1,0 +1,232 @@
+from typing import cast
+
+from loguru import logger
+from pydantic import TypeAdapter
+from fastapi import APIRouter, Request, HTTPException, Path, status
+from fastapi.responses import JSONResponse
+
+from src.configs.db import MainMongo
+from src.models.base import SearchSchema
+from src.models.template import (
+    TemplateMeta,
+    TemplateData,
+    TemplateView,
+    TemplateViewList,
+)
+
+app = APIRouter()
+__main_collection = "template"
+
+
+@app.get("/{id}")
+def get_template(req: Request, id: str = Path(...)):
+    try:
+        mongo = cast(MainMongo, req.app.state.mongo)
+
+        raw = mongo.db[__main_collection].find_one(
+            {"_id": id, "status": {"$ne": "archive"}}
+        )
+        if raw:
+            payload = TypeAdapter(TemplateView).validate_python(raw)
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "status": status.HTTP_200_OK,
+                    "message": "Success get all template",
+                    "data": payload.model_dump(),
+                },
+            )
+
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "status": status.HTTP_404_NOT_FOUND,
+                "message": "Template is not found",
+            },
+        )
+
+    except Exception:
+        logger.opt(exception=Exception).error("Failed get template")
+        return HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed get template",
+        )
+
+
+@app.get("s")
+def get_all_templates(req: Request):
+    try:
+
+        # ? Get mongo from lifespan
+        mongo = cast(MainMongo, req.app.state.mongo)
+
+        raw = mongo.db[__main_collection].find({"status": {"$ne": "archive"}})
+        templates = list(raw)
+        # * Validation if template is exists
+        if templates:
+            # * Transform template model
+            payloads = TypeAdapter(TemplateViewList).validate_python(templates)
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "status": status.HTTP_200_OK,
+                    "message": "Success get all template",
+                    "data": payloads.model_dump(),
+                    "metadata": {"size": payloads.__len__()},
+                },
+            )
+
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "status": status.HTTP_404_NOT_FOUND,
+                "message": "Template is not found",
+            },
+        )
+
+    except Exception:
+        logger.opt(exception=Exception).error("Failed get all template")
+        return HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed get all template",
+        )
+
+
+@app.post("s/search")
+def search_templates(req: Request, search: SearchSchema):
+    try:
+        mongo = cast(MainMongo, req.app.state.mongo)
+        query = {"status": {"$ne": "archive"}}
+        count = mongo.db[__main_collection].count_documents(query)
+        raw = mongo.db[__main_collection].find(
+            query.update({search.field: {"$regex": search.value}})
+        )
+        templates = list(raw)
+
+        # * Validation if template is exists
+        if templates:
+            # * Transform template model
+            payloads = TypeAdapter(TemplateViewList).validate_python(templates)
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "status": status.HTTP_200_OK,
+                    "message": "Success get all template",
+                    "data": payloads.model_dump(),
+                    "metadata": {"size": count, "totalItems": payloads.__len__()},
+                },
+            )
+
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "status": status.HTTP_404_NOT_FOUND,
+                "message": "Template is not found",
+            },
+        )
+
+    except Exception:
+        logger.opt(exception=Exception).error("Failed get all template")
+        return HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed get all template",
+        )
+
+
+@app.post("")
+def add_template(req: Request, data: TemplateMeta):
+    try:
+        mongo = cast(MainMongo, req.app.state.mongo)
+
+        payload = TypeAdapter(TemplateData).validate_python(data.model_dump())
+
+        mongo.db[__main_collection].insert_one(payload.save_mongo)
+
+        return JSONResponse(
+            status_code=status.HTTP_201_CREATED,
+            content={
+                "status": status.HTTP_201_CREATED,
+                "message": "Success add template",
+                "data": {"id": payload.id},
+            },
+        )
+    except Exception:
+        logger.opt(exception=Exception).error("Failed add template")
+        return HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed add template",
+        )
+
+
+@app.put("/{id}")
+def edit_template(req: Request, data: TemplateMeta, id: str = Path(...)):
+    try:
+        mongo = cast(MainMongo, req.app.state.mongo)
+
+        raw = mongo.db[__main_collection].find_one({"_id": id})
+        if raw:
+            payload = TypeAdapter(TemplateData).validate_python(data.model_dump())
+
+            mongo.db[__main_collection].update_one(
+                {"_id": id}, {"$set": payload.update_mongo}
+            )
+
+            return JSONResponse(
+                status_code=status.HTTP_202_ACCEPTED,
+                content={
+                    "status": status.HTTP_202_ACCEPTED,
+                    "message": "Success edit template",
+                    "data": {"id": payload.id},
+                },
+            )
+
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "status": status.HTTP_404_NOT_FOUND,
+                "message": "Template is not found",
+            },
+        )
+    except Exception:
+        logger.opt(exception=Exception).error("Failed edit template")
+        return HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed edit template",
+        )
+
+
+@app.delete("/{id}")
+def delete_template(req: Request, id: str = Path(...)):
+    try:
+        mongo = cast(MainMongo, req.app.state.mongo)
+
+        raw = mongo.db[__main_collection].find_one({"_id": id})
+        if raw:
+            payload = TypeAdapter(TemplateData).validate_python(raw)
+
+            mongo.db[__main_collection].update_one(
+                {"_id": id}, {"$set": payload.delete_mongo}
+            )
+
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "status": status.HTTP_200_OK,
+                    "message": "Success delete template",
+                    "data": {"id": payload.id},
+                },
+            )
+
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "status": status.HTTP_404_NOT_FOUND,
+                "message": "Template is not found",
+            },
+        )
+    except Exception:
+        logger.opt(exception=Exception).error("Failed delete template")
+        return HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed delete template",
+        )
