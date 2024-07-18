@@ -37,7 +37,7 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
 
         # Check if IP is already present in request_counts
         request_count, last_request = self.request_counts.get(
-            client_ip, (0, datetime.min)
+            client_ip, (0, datetime.now())
         )
 
         # Calculate the time elapsed since the last request
@@ -63,4 +63,8 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
 
         # Proceed with the request
         response = await call_next(request)
+        response.headers["X-Rate-Limit-Limit"] = str(self.RATE_LIMIT_REQUESTS)
+        response.headers["X-Rate-Limit-Remaining"] = str(
+            max(0, self.RATE_LIMIT_REQUESTS - request_count)
+        )
         return response
