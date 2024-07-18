@@ -9,7 +9,7 @@ from starlette.middleware.cors import CORSMiddleware
 from src.configs.db import MainPostgre
 from src.routes.base import router as api_router
 from src.routes.middleware import ProcessTimeMiddleware, RateLimitingMiddleware
-from src.models.post import Base
+from src.models.post import SQLModel
 
 
 def get_application() -> FastAPI:
@@ -18,7 +18,7 @@ def get_application() -> FastAPI:
     async def lifespan(app: FastAPI):
         app.state.postgre = MainPostgre()
         app.state.postgre.connect()
-        Base.metadata.create_all(app.state.postgre.engine)
+        SQLModel.metadata.create_all(app.state.postgre.engine)
         yield
         app.state.postgre.close()
 

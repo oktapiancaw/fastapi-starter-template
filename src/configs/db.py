@@ -1,6 +1,6 @@
 from loguru import logger
-from sqlalchemy import create_engine, Engine, URL
-from sqlalchemy.orm import Session
+from sqlalchemy import Engine, URL
+from sqlmodel import create_engine, Session
 
 from src.common.env import envs
 from src.models.base import DatabaseConnectionMeta

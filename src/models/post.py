@@ -1,78 +1,32 @@
-from uuid import uuid4
+import uuid
+
 from typing import Optional
 from datetime import datetime
-
-from pydantic import (
-    BaseModel,
-    RootModel,
-    ConfigDict,
-    Field,
-    model_validator,
-    field_serializer,
-    UUID4,
-)
-from sqlalchemy import (
-    Column,
-    Boolean,
-    String,
-    TIMESTAMP,
-    Text,
-    func,
-    text,
-)
-from sqlalchemy.dialects.postgresql import UUID
+from sqlmodel import SQLModel, Field
+from pydantic import RootModel, field_serializer
 
 
-from src.models.base import Base
+class PostMeta(SQLModel):
+    title: str = Field(nullable=False)
+    content: str = Field(nullable=False)
+    status: str = Field(nullable=False)
+    published: Optional[bool] = Field(default=True, nullable=False)
 
 
-class PostOrm(Base):
+class PostData(PostMeta, table=True):
     __tablename__ = "posts"
 
-    # ? ID
-    id = Column(
-        UUID(as_uuid=True), server_default=text("uuid_generate_v4()"), primary_key=True
+    id: uuid.UUID = Field(
+        default_factory=lambda: uuid.uuid4(),
+        primary_key=True,
+        index=True,
+        nullable=False,
     )
-
-    # ? Base meta
-    title = Column(String, nullable=False)
-    content = Column(Text, nullable=False)
-    status = Column(String, nullable=False)
-    published = Column(Boolean, default=True, nullable=False)
-
-    # ? Time
-    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=True)
-    updated_at = Column(TIMESTAMP, nullable=True)
-    deleted_at = Column(TIMESTAMP, nullable=True)
-
-
-class PostMeta(BaseModel):
-    title: str = Field(..., description="Title post")
-    content: str = Field(..., description="Content post")
-    published: Optional[bool] = Field(default=True, description="Published post")
-
-    model_config = ConfigDict(
-        extra="forbid",
-        json_schema_extra={
-            "example": {
-                "title": "Title post",
-                "content": "Content post",
-                "published": True,
-            }
-        },
+    created_at: Optional[datetime] = Field(
+        default_factory=lambda: datetime.now(), nullable=True
     )
-
-
-class PostData(PostMeta):
-    id: UUID4 = Field(default_factory=lambda: uuid4())
-    status: Optional[str] = "active"
-    created_at: Optional[datetime] = Field(default_factory=lambda: datetime.now())
-    updated_at: Optional[datetime] = Field(None)
-    deleted_at: Optional[datetime] = Field(None)
-
-    @property
-    def orm_structure(self) -> PostOrm:
-        return PostOrm(**self.model_dump())
+    updated_at: Optional[datetime] = Field(None, nullable=True)
+    deleted_at: Optional[datetime] = Field(None, nullable=True)
 
     @field_serializer("id")
     def serialize_id(self, value):
@@ -94,15 +48,8 @@ class PostData(PostMeta):
             return str(value.strftime("%Y-%m-%d %H:%M:%S"))
 
 
-class PostView(PostData):
-
-    model_config = ConfigDict(
-        from_attributes=True,
-    )
-
-
-class PostViewList(RootModel):
-    root: list[PostView]
+class PostList(RootModel):
+    root: list[PostData]
 
     def __iter__(self):
         return iter(self.root)

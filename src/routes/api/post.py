@@ -1,36 +1,30 @@
 from typing import cast
 
 from loguru import logger
-from pydantic import TypeAdapter
 from fastapi import APIRouter, Request, HTTPException, Path, status
 from fastapi.responses import JSONResponse
-from sqlalchemy import text
+from sqlmodel import select, text
 
 from src.configs.db import MainPostgre
 from src.models.base import SearchSchema
-from src.models.post import PostMeta, PostData, PostView, PostViewList, PostOrm
+from src.models.post import PostMeta, PostData
 
 app = APIRouter()
-__main_collection = PostOrm.__tablename__
 
 
-@app.get("/{id}")
+@app.get("/{id}", response_model=PostData)
 def get_post(req: Request, id: str = Path(...)):
     try:
         postgre = cast(MainPostgre, req.app.state.postgre)
 
-        raw = postgre.client.query(PostOrm).where(PostOrm.id == id).first()
-        if raw:
-            payload = TypeAdapter(PostView).validate_python(raw)
-            return JSONResponse(
-                status_code=status.HTTP_200_OK,
-                content={
-                    "status": status.HTTP_200_OK,
-                    "message": "Success get all post",
-                    "data": payload.model_dump(),
-                },
-            )
-
+        statement = (
+            select(PostData)
+            .where(PostData.status != "archive")
+            .where(PostData.id == id)
+        )
+        result = postgre.client.exec(statement).first()
+        if result:
+            return result
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
             content={
@@ -46,26 +40,15 @@ def get_post(req: Request, id: str = Path(...)):
         )
 
 
-@app.get("s")
+@app.get("", response_model=list[PostData])
 def get_all_posts(req: Request):
     try:
         postgre = cast(MainPostgre, req.app.state.postgre)
 
-        raw = postgre.client.query(PostOrm).where(PostOrm.status != "archive").all()
-        # * Validation if post is exists
-        if raw:
-            # * Transform post model
-            payloads = TypeAdapter(PostViewList).validate_python(raw)
-            return JSONResponse(
-                status_code=status.HTTP_200_OK,
-                content={
-                    "status": status.HTTP_200_OK,
-                    "message": "Success get all post",
-                    "data": payloads.model_dump(),
-                    "metadata": {"size": payloads.__len__()},
-                },
-            )
-
+        statement = select(PostData).where(PostData.status != "archive")
+        result = postgre.client.exec(statement).all()
+        if result:
+            return result
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
             content={
@@ -82,36 +65,19 @@ def get_all_posts(req: Request):
         )
 
 
-@app.post("s/search")
+@app.post("/search", response_model=list[PostData])
 def search_posts(req: Request, search: SearchSchema):
     try:
         postgre = cast(MainPostgre, req.app.state.postgre)
 
-        count = postgre.client.execute(
-            text(
-                f"""SELECT COUNT(id) FROM public."{__main_collection}" WHERE status<>\'archive\'"""
-            )
-        ).scalar()
-        raw = (
-            postgre.client.query(PostOrm)
-            .where(PostOrm.status != "archive")
+        statement = (
+            select(PostData)
+            .where(PostData.status != "archive")
             .where(text(f"{search.field} ILIKE '%{search.value}%'"))
-            .all()
         )
-        # * Validation if post is exists
-        if raw:
-            # * Transform post model
-            payloads = TypeAdapter(PostViewList).validate_python(raw)
-            return JSONResponse(
-                status_code=status.HTTP_200_OK,
-                content={
-                    "status": status.HTTP_200_OK,
-                    "message": "Success get all post",
-                    "data": payloads.model_dump(),
-                    "metadata": {"size": count, "totalItems": payloads.__len__()},
-                },
-            )
-
+        result = postgre.client.exec(statement).all()
+        if result:
+            return result
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
             content={
@@ -128,24 +94,17 @@ def search_posts(req: Request, search: SearchSchema):
         )
 
 
-@app.post("")
+@app.post("", response_model=PostData, status_code=status.HTTP_201_CREATED)
 def add_post(req: Request, data: PostMeta):
     try:
         postgre = cast(MainPostgre, req.app.state.postgre)
 
-        payload = TypeAdapter(PostData).validate_python(data.model_dump())
-
-        postgre.client.add(payload.orm_structure)
+        payload = PostData.model_validate(data)
+        postgre.client.add(payload)
         postgre.client.commit()
+        postgre.client.refresh(payload)
 
-        return JSONResponse(
-            status_code=status.HTTP_201_CREATED,
-            content={
-                "status": status.HTTP_201_CREATED,
-                "message": "Success add post",
-                "data": {"id": str(payload.id)},
-            },
-        )
+        return payload
     except Exception:
         logger.opt(exception=Exception).error("Failed add post")
         return HTTPException(
@@ -153,26 +112,19 @@ def add_post(req: Request, data: PostMeta):
         )
 
 
-@app.put("/{id}")
+@app.put("/{id}", response_model=PostMeta)
 def edit_post(req: Request, data: PostMeta, id: str = Path(...)):
     try:
         postgre = cast(MainPostgre, req.app.state.postgre)
 
-        raw = postgre.client.query(PostOrm).where(PostOrm.id == id).first()
-        if raw:
-            postgre.client.query(PostOrm).where(PostOrm.id == id).update(
-                data.model_dump(exclude_none=True)
-            )
+        post_data = postgre.client.get(PostData, id)
+        if post_data:
+            post_data.sqlmodel_update(data)
+            postgre.client.add(post_data)
             postgre.client.commit()
+            postgre.client.refresh(post_data)
 
-            return JSONResponse(
-                status_code=status.HTTP_202_ACCEPTED,
-                content={
-                    "status": status.HTTP_202_ACCEPTED,
-                    "message": "Success edit post",
-                    "data": {"id": id},
-                },
-            )
+            return post_data
 
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -188,26 +140,16 @@ def edit_post(req: Request, data: PostMeta, id: str = Path(...)):
         )
 
 
-@app.delete("/{id}")
+@app.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_post(req: Request, id: str = Path(...)):
     try:
         postgre = cast(MainPostgre, req.app.state.postgre)
 
-        raw = postgre.client.query(PostOrm).where(PostOrm.id == id).first()
-        if raw:
-            postgre.client.query(PostOrm).where(PostOrm.id == id).update(
-                {"status": "archive"}
-            )
+        post_data = postgre.client.get(PostData, id)
+        if post_data:
+            postgre.client.delete(post_data)
             postgre.client.commit()
-
-            return JSONResponse(
-                status_code=status.HTTP_200_OK,
-                content={
-                    "status": status.HTTP_200_OK,
-                    "message": "Success delete post",
-                    "data": {"id": id},
-                },
-            )
+            return
 
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
